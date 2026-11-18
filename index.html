@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PCN Explorer — Singapore Park Connector routes</title>
+<link rel="stylesheet" href="leaflet.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<style>
+:root{--bg:#f6f7f4;--panel:#fff;--ink:#1c2420;--mute:#66706a;--line:#e3e6e1;--pcn:#1f8a4c;--unv:#e08a12;--link:#9aa39d;--gap:#d23b3b;--done:#2563eb;--accent:#1f8a4c}
+@media (prefers-color-scheme:dark){:root{--bg:#141816;--panel:#1c211e;--ink:#e8ece9;--mute:#9aa49e;--line:#2c332f;--link:#5d665f}}
+*{box-sizing:border-box}html,body{margin:0;height:100%;font-family:Inter,system-ui,sans-serif;color:var(--ink);background:var(--bg);font-size:14px}
+#app{display:flex;height:100%}
+#side{width:380px;min-width:300px;max-width:100%;background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;z-index:2}
+#map{flex:1;background:#dfe9ef}
+@media (prefers-color-scheme:dark){#map{background:#0f1a22}}
+header{padding:16px 18px 10px;border-bottom:1px solid var(--line)}
+h1{font-size:18px;margin:0 0 2px;letter-spacing:-.01em}h1 span{color:var(--accent)}
+.sub{color:var(--mute);font-size:12.5px}
+.scroll{overflow:auto;flex:1;padding:12px 18px 24px}
+label.f{display:block;font-size:12px;font-weight:600;color:var(--mute);margin:10px 0 4px;text-transform:uppercase;letter-spacing:.04em}
+.pick{position:relative}
+.pick input{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit}
+.pick input:focus{outline:2px solid var(--accent);outline-offset:-1px}
+.dd{position:absolute;left:0;right:0;top:100%;background:var(--panel);border:1px solid var(--line);border-radius:8px;max-height:260px;overflow:auto;z-index:1000;box-shadow:0 8px 24px rgba(0,0,0,.15);display:none}
+.dd div{padding:7px 10px;cursor:pointer;display:flex;gap:8px;align-items:baseline}.dd div:hover,.dd div.hl{background:var(--bg)}
+.dd small{color:var(--mute);margin-left:auto;white-space:nowrap}
+.tag{font-size:10.5px;font-weight:600;padding:1px 6px;border-radius:9px;background:var(--bg);color:var(--mute);white-space:nowrap}
+.row{display:flex;gap:8px;align-items:center}
+.seg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;margin-top:10px}
+.seg button{flex:1;border:0;background:transparent;color:var(--ink);padding:7px;font:inherit;cursor:pointer}
+.seg button.on{background:var(--accent);color:#fff}
+.btn{border:0;background:var(--accent);color:#fff;padding:9px 14px;border-radius:8px;font:inherit;font-weight:600;cursor:pointer}
+.btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
+.btn:disabled{opacity:.5;cursor:default}
+.swap{width:34px;height:34px;padding:0;border-radius:50%;margin:8px auto 0;display:block}
+.card{border:1px solid var(--line);border-radius:10px;padding:12px;margin-top:14px}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:4px 0 8px}
+.stat b{display:block;font-size:18px}.stat span{font-size:11.5px;color:var(--mute)}
+.warn{font-size:12.5px;color:var(--mute);margin-top:6px;line-height:1.45}
+.warn i{font-style:normal;font-weight:600}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}
+.chip{border:1px solid var(--line);border-radius:14px;padding:4px 9px;font-size:12px;cursor:pointer;user-select:none;background:var(--panel);color:var(--ink)}
+.chip.off{opacity:.45}
+.stop{display:flex;gap:10px;padding:8px 0;border-top:1px solid var(--line);cursor:pointer}
+.stop:first-child{border-top:0}
+.km{min-width:52px;font-variant-numeric:tabular-nums;font-weight:600;color:var(--accent)}
+.stop .nm{font-weight:500}.stop .mt{font-size:12px;color:var(--mute)}
+.ico{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;flex:none;color:#fff}
+.bar{height:8px;border-radius:4px;background:var(--line);overflow:hidden;margin:6px 0}.bar i{display:block;height:100%;background:var(--done)}
+.legend{position:absolute;right:10px;bottom:22px;z-index:500;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:12px;line-height:1.7}
+.legend s{display:inline-block;width:22px;height:0;border-top:3px solid;vertical-align:middle;margin-right:6px;text-decoration:none}
+.leaflet-container{font:inherit}
+.leaflet-popup-content{font-size:13px}
+.lbl{font-size:10.5px;color:#6b7a73;font-weight:600;text-transform:uppercase;letter-spacing:.05em;white-space:nowrap;text-shadow:0 0 3px #fff}
+@media (prefers-color-scheme:dark){.lbl{color:#7f8c86;text-shadow:0 0 3px #000}}
+#toggle{display:none}
+@media (max-width:760px){#app{flex-direction:column-reverse}#side{width:100%;height:55%;border-right:0;border-top:1px solid var(--line)}#map{height:45%}}
+details summary{cursor:pointer;font-weight:600;margin:4px 0}
+.small{font-size:12px;color:var(--mute);line-height:1.5}
+a{color:var(--accent)}
+</style>
+</head>
+<body>
+<div id="app">
+<aside id="side">
+<header>
+<h1><span>PCN</span> Explorer</h1>
+<div class="sub">Plan routes on Singapore's park connectors, see stops along the way, and track what you've covered.</div>
+</header>
+<div class="scroll">
+<div id="loading" class="small">Loading network…</div>
+<div id="ui" style="display:none">
+<label class="f">Start</label>
+<div class="pick"><input id="from" placeholder="MRT station, park or hawker centre" autocomplete="off"><div class="dd"></div></div>
+<button class="btn ghost swap" id="swap" title="Swap start and end">⇅</button>
+<label class="f" style="margin-top:0">End</label>
+<div class="pick"><input id="to" placeholder="MRT station, park or hawker centre" autocomplete="off"><div class="dd"></div></div>
+<div class="seg" id="mode"><button data-m="walk" class="on">Walk / run</button><button data-m="cycle">Cycle</button></div>
+<div class="row" style="margin-top:12px"><button class="btn" id="go" style="flex:1" disabled>Plan route</button><button class="btn ghost" id="clear">Clear</button></div>
+
+<div id="result"></div>
+
+<div class="card">
+<div class="row"><b style="flex:1">My PCN coverage</b><span id="covpct" class="tag">0%</span></div>
+<div class="bar"><i id="covbar" style="width:0"></i></div>
+<div class="small" id="covtxt"></div>
+<div class="row" style="margin-top:8px;flex-wrap:wrap">
+<label class="btn ghost" style="font-weight:500">Import GPX<input type="file" id="gpx" accept=".gpx,application/gpx+xml" multiple hidden></label>
+<button class="btn ghost" id="showdone" style="font-weight:500">Hide covered</button>
+<button class="btn ghost" id="reset" style="font-weight:500">Reset</button>
+</div>
+<div class="small" id="syncnote" style="margin-top:6px"></div>
+<details style="margin-top:8px"><summary class="small" style="font-weight:600">Sync settings</summary>
+<div class="small" style="margin:6px 0">Paste the web app URL and secret from your Google Sheet's Apps Script (see the README). Each device needs this once.</div>
+<div class="pick"><input id="surl" placeholder="https://script.google.com/macros/s/…/exec" autocomplete="off"></div>
+<div class="pick" style="margin-top:6px"><input id="skey" type="password" placeholder="Secret" autocomplete="off"></div>
+<button class="btn" id="ssave" style="margin-top:8px;width:100%">Save & sync</button>
+</details>
+<div id="history"></div>
+</div>
+
+<details class="card"><summary>About the data</summary>
+<div class="small">
+<p>The network combines URA Master Plan 2025 park connector lines with NParks' Park Connector Loop, NParks Tracks and the older NParks connector map. Every Master Plan line was checked against those three and against OpenStreetMap.</p>
+<p><span style="color:var(--pcn)">■</span> <b>Confirmed connector</b> — at least one other source shows it.<br>
+<span style="color:var(--unv)">■</span> <b>Unverified</b> — only the Master Plan shows it, so it may still be planned. Routing avoids it slightly.<br>
+<span style="color:var(--link)">■</span> <b>Link path</b> — park paths, footpaths and bridges that join connectors (OpenStreetMap / NParks). These don't count toward your coverage.<br>
+<span style="color:var(--gap)">■</span> <b>Gap</b> — a short break (usually a road crossing) that no dataset draws. Check it on the ground.</p>
+<p>Toilets, water points, shelters, cafés and coffee shops come from OpenStreetMap, so some may be missing or closed. Hawker centres come from NEA. Built <span id="built"></span>.</p>
+<p id="srcs"></p>
+</div></details>
+</div>
+</div>
+</aside>
+<div id="map" style="position:relative">
+<div class="legend"><div><s style="border-color:var(--pcn)"></s>Park connector</div><div><s style="border-color:var(--unv);border-top-style:dashed"></s>Unverified</div><div><s style="border-color:var(--link);border-top-width:2px"></s>Link path</div><div><s style="border-color:var(--done)"></s>Covered</div><div><s style="border-color:#111;border-top-width:5px"></s>Your route</div></div>
+</div>
+</div>
+<script>
+const CAT={toilet:{n:'Toilets',c:'#0e7490',i:'WC',on:1},water:{n:'Water',c:'#2563eb',i:'💧',on:1},hawker:{n:'Hawker centres',c:'#c2410c',i:'🍜',on:1},cafe:{n:'Cafés',c:'#7c3aed',i:'☕',on:1},foodcourt:{n:'Coffee shops',c:'#a16207',i:'🍽',on:0},shelter:{n:'Shelters',c:'#64748b',i:'⛱',on:0},repair:{n:'Bike repair',c:'#15803d',i:'🔧',on:1}};
+const WPT={station:'MRT/LRT',park:'Park',hawker:'Hawker'};
+const FACT={walk:{0:1,1:1.4,2:2.2,3:3,4:2.6,5:2.2},cycle:{0:1,1:1.4,2:2.4,3:3,4:Infinity,5:5}};
+const SPEED={walk:{w:5,r:10},cycle:15};
+let D,E=[],adj,map,route=null,mode='walk',fromW=null,toW=null,done=new Set(),hist=[],db=null,userId=null,showDone=true;
+const $=s=>document.querySelector(s);
+const fmt=m=>m>=1000?(m/1000).toFixed(m>=10000?0:1)+' km':Math.round(m)+' m';
+function decode(f){const out=[[f[1]/1e5,f[0]/1e5]];let x=f[0],y=f[1];for(let i=2;i<f.length;i+=2){x+=f[i];y+=f[i+1];out.push([y/1e5,x/1e5])}return out}
+// ---------- storage & sync ----------
+const LS='pcn-explorer-v1',LSC='pcn-explorer-sync';
+let pending={seg:[],hist:[]},cfg={url:'',key:''},syncing=false,lastSync=0;
+function saveLocal(){try{localStorage.setItem(LS,JSON.stringify({done:[...done],hist,pending}))}catch(e){}}
+function loadLocal(){try{const s=JSON.parse(localStorage.getItem(LS)||'null');if(s){done=new Set(s.done||[]);hist=s.hist||[];pending=s.pending||pending}}catch(e){}
+ try{cfg=JSON.parse(localStorage.getItem(LSC)||'null')||cfg}catch(e){}}
+function persist(){saveLocal();push()}
+function syncNote(t){$('#syncnote').textContent=t}
+function syncState(){if(!cfg.url||!cfg.key){syncNote('Saved in this browser only. Open Sync settings to sync across devices.');return}
+ const n=pending.seg.length+pending.hist.length;syncNote(n?`${n} change${n>1?'s':''} waiting to sync…`:lastSync?'Synced '+new Date(lastSync).toLocaleTimeString('en-SG',{hour:'numeric',minute:'2-digit'}):'Sync on.')}
+async function call(body){const r=await fetch(cfg.url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({...body,key:cfg.key})});const j=await r.json();if(!j.ok)throw new Error(j.error||'sync failed');return j}
+function segInfo(i){const e=E[i],m=e.ll[Math.floor(e.ll.length/2)];return {id:i,name:D.names[e.n]||'',len:e.L,lat:+m[0].toFixed(5),lon:+m[1].toFixed(5)}}
+let midGrid=null;
+function remap(lat,lon){ // find this network's connector segment nearest an old segment midpoint
+ if(!midGrid){midGrid=new Map();E.forEach((e,i)=>{if(e.c>1)return;const m=e.ll[Math.floor(e.ll.length/2)],k=Math.round(m[0]*500)+','+Math.round(m[1]*500);if(!midGrid.has(k))midGrid.set(k,[]);midGrid.get(k).push([i,m])})}
+ const ky=Math.round(lat*500),kx=Math.round(lon*500);let best=null;
+ for(let a=-1;a<=1;a++)for(let b=-1;b<=1;b++)for(const [i,m] of midGrid.get((ky+a)+','+(kx+b))||[]){const d=Math.hypot((m[0]-lat)*110574,(m[1]-lon)*111280);if(d<40&&(!best||d<best[0]))best=[d,i]}
+ return best?best[1]:null}
+async function pull(){if(!cfg.url||!cfg.key||syncing)return;syncing=true;
+ try{const j=await call({action:'get'});let ch=0;
+  j.segments.forEach(s=>{const i=s.v===D.meta.version?s.id:remap(s.lat,s.lon);if(i!=null&&E[i]&&E[i].c<2&&!done.has(i)){done.add(i);ch++}});
+  j.hist.forEach(h=>{if(!hist.some(k=>k.t===h.t)){hist.push(h);ch++}});hist.sort((a,b)=>a.t-b.t);
+  lastSync=Date.now();saveLocal();if(ch){renderCov();renderDone()}}
+ catch(e){syncNote('Sync did not go through ('+e.message+'). Your changes are kept here and will retry.');syncing=false;return}
+ syncing=false;await push()}
+async function push(){syncState();if(!cfg.url||!cfg.key||syncing||!(pending.seg.length||pending.hist.length))return;syncing=true;
+ const seg=[...pending.seg],hs=[...pending.hist];
+ try{await call({action:'add',v:D.meta.version,segments:seg.map(segInfo),hist:hs});
+  pending.seg=pending.seg.filter(x=>!seg.includes(x));pending.hist=pending.hist.filter(h=>!hs.includes(h));lastSync=Date.now();saveLocal();syncing=false;syncState()}
+ catch(e){syncing=false;syncNote('Sync did not go through ('+e.message+'). Your changes are kept here and will retry.')}}
+function addDone(ids){let add=0;ids.forEach(i=>{if(E[i].c<2&&!done.has(i)){done.add(i);pending.seg.push(i);add+=E[i].L}});return add}
+function logHist(h){hist.push(h);pending.hist.push(h)}
+function setupSync(){$('#surl').value=cfg.url||'';$('#skey').value=cfg.key||'';
+ $('#ssave').onclick=async()=>{cfg={url:$('#surl').value.trim(),key:$('#skey').value.trim()};try{localStorage.setItem(LSC,JSON.stringify(cfg))}catch(e){}
+  if(!cfg.url||!cfg.key){syncState();return}
+  // first connection: send everything this browser has
+  pending.seg=[...new Set([...pending.seg,...done])];pending.hist=[...hist.filter(h=>!pending.hist.includes(h)),...pending.hist];
+  syncNote('Connecting…');await pull()};
+ document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')pull()});
+ syncState();pull()}
+// ---------- load ----------
+fetch('net.json').then(r=>r.json()).then(init).catch(e=>{$('#loading').textContent='Could not load the network data. ('+e+')'});
+function init(d){D=d;
+ const nN=D.nodes.length;adj=Array.from({length:nN},()=>[]);
+ D.edges.forEach((e,i)=>{const [u,v,L,c,n,f]=e;E.push({u,v,L,c,n,ll:decode(f)});adj[u].push(i);adj[v].push(i)});
+ D.pcnTotal=E.reduce((s,e)=>s+(e.c<2?e.L:0),0);
+ $('#built').textContent=D.meta.built+' (network '+D.meta.version+')';$('#srcs').textContent='Sources: '+D.meta.sources.join('; ')+'.';
+ buildMap();loadLocal();renderCov();renderDone();setupPickers();setupSync();
+ $('#loading').style.display='none';$('#ui').style.display='block';
+}
+// ---------- map ----------
+let lyrNet,lyrLink,lyrDone,lyrRoute,lyrPoi,lyrEnds,canv;
+function buildMap(){
+ map=L.map('map',{preferCanvas:true,zoomControl:true,minZoom:11,maxZoom:19}).setView([1.355,103.83],12);
+ map.setMaxBounds([[1.1,103.5],[1.55,104.2]]);
+ canv=L.canvas({padding:.3,tolerance:6});
+ // vector basemap: planning areas (works everywhere)
+ const dark=matchMedia('(prefers-color-scheme:dark)').matches;
+ const areas=L.layerGroup().addTo(map);
+ D.areas.forEach(([nm,c,rings])=>{L.polygon(rings.map(r=>r.map(p=>[p[1],p[0]])),{renderer:canv,color:dark?'#2b3530':'#c9d3cc',weight:1,fillColor:dark?'#1d2420':'#eef2ec',fillOpacity:1,interactive:false}).addTo(areas)});
+ const lbls=L.layerGroup();D.areas.forEach(([nm,c])=>L.marker([c[1],c[0]],{icon:L.divIcon({className:'lbl',html:nm,iconSize:null}),interactive:false}).addTo(lbls));
+ const upd=()=>{map.getZoom()>=13?lbls.addTo(map):lbls.remove()};map.on('zoomend',upd);upd();
+ // optional street tiles (load only where the host allows images)
+ const tiles=L.tileLayer('https://www.onemap.gov.sg/maps/tiles/'+(dark?'Night':'Grey')+'/{z}/{x}/{y}.png',{maxZoom:19,minZoom:11,opacity:.9,attribution:'<a href="https://www.onemap.gov.sg/">OneMap</a> © SLA'});
+ let ok=0;tiles.on('tileload',()=>{ok++});tiles.addTo(map);
+ lyrLink=L.layerGroup();lyrNet=L.layerGroup().addTo(map);lyrDone=L.layerGroup().addTo(map);lyrRoute=L.layerGroup().addTo(map);lyrPoi=L.layerGroup().addTo(map);lyrEnds=L.layerGroup().addTo(map);
+ E.forEach((e,i)=>{
+  if(e.c<2) L.polyline(e.ll,{renderer:canv,color:e.c==0?'#1f8a4c':'#e08a12',weight:3,opacity:.9,dashArray:e.c==1?'6 5':null}).bindTooltip(()=>(D.names[e.n]||'Park connector')+(e.c==1?' · unverified':'')+' · '+fmt(e.L),{sticky:true}).addTo(lyrNet);
+  else if(e.c==3) L.polyline(e.ll,{renderer:canv,color:'#d23b3b',weight:3,dashArray:'2 4'}).bindTooltip('Gap in the data ('+fmt(e.L)+') — usually a road crossing',{sticky:true}).addTo(lyrNet);
+  else L.polyline(e.ll,{renderer:canv,color:dark?'#5d665f':'#9aa39d',weight:1.5,opacity:.8,dashArray:e.c==4?'1 3':null}).bindTooltip(()=>(D.names[e.n]||'Link path')+(e.c==4?' · steps':e.c==5?' · no cycling':''),{sticky:true}).addTo(lyrLink);
+ });
+ const lk=()=>{map.getZoom()>=14?lyrLink.addTo(map):lyrLink.remove()};map.on('zoomend',lk);lk();
+ map.attributionControl.addAttribution('Data: NParks, URA, NEA (data.gov.sg) · © OpenStreetMap contributors');
+}
+function renderDone(){lyrDone.clearLayers();if(!showDone)return;done.forEach(i=>{const e=E[i];if(e)L.polyline(e.ll,{renderer:canv,color:'#2563eb',weight:4,opacity:.85,interactive:false}).addTo(lyrDone)})}
+// ---------- pickers ----------
+function setupPickers(){
+ const items=D.wps.map((w,i)=>({i,t:w[0],name:w[1],node:w[2],off:w[3],lon:w[4],lat:w[5],key:w[1].toLowerCase()}));
+ items.sort((a,b)=>a.name.localeCompare(b.name));
+ [['#from',w=>{fromW=w}],['#to',w=>{toW=w}]].forEach(([sel,set])=>{
+  const inp=$(sel),dd=inp.nextElementSibling;let hl=0,list=[];
+  const show=()=>{const q=inp.value.trim().toLowerCase();list=items.filter(it=>!q||it.key.includes(q)).sort((a,b)=>(a.key.startsWith(q)?0:1)-(b.key.startsWith(q)?0:1)).slice(0,60);
+   dd.innerHTML=list.map((it,k)=>`<div data-k="${k}" class="${k==hl?'hl':''}"><span>${esc(it.name)}</span><small><span class="tag">${WPT[it.t]}</span></small></div>`).join('')||'<div class="small">No match</div>';dd.style.display='block'};
+  const pick=it=>{inp.value=it.name;set(it);dd.style.display='none';markEnds();$('#go').disabled=!(fromW&&toW);if(fromW&&toW)plan()};
+  inp.addEventListener('focus',()=>{inp.select();hl=0;show()});inp.addEventListener('input',()=>{hl=0;set(null);$('#go').disabled=true;show()});
+  inp.addEventListener('keydown',e=>{if(e.key=='ArrowDown'){hl=Math.min(hl+1,list.length-1);show();e.preventDefault()}else if(e.key=='ArrowUp'){hl=Math.max(hl-1,0);show();e.preventDefault()}else if(e.key=='Enter'&&list[hl]){pick(list[hl]);e.preventDefault()}else if(e.key=='Escape'){dd.style.display='none'}});
+  dd.addEventListener('mousedown',e=>{const d=e.target.closest('[data-k]');if(d){e.preventDefault();pick(list[+d.dataset.k])}});
+  inp.addEventListener('blur',()=>setTimeout(()=>dd.style.display='none',150));
+ });
+ $('#swap').onclick=()=>{[fromW,toW]=[toW,fromW];$('#from').value=fromW?fromW.name:'';$('#to').value=toW?toW.name:'';markEnds();if(fromW&&toW)plan()};
+ $('#go').onclick=plan;$('#clear').onclick=()=>{fromW=toW=null;route=null;$('#from').value=$('#to').value='';$('#go').disabled=true;lyrRoute.clearLayers();lyrPoi.clearLayers();lyrEnds.clearLayers();$('#result').innerHTML=''};
+ document.querySelectorAll('#mode button').forEach(b=>b.onclick=()=>{document.querySelectorAll('#mode button').forEach(x=>x.classList.toggle('on',x===b));mode=b.dataset.m;if(route)plan()});
+ $('#gpx').onchange=importGpx;$('#reset').onclick=resetCov;
+ $('#showdone').onclick=()=>{showDone=!showDone;$('#showdone').textContent=showDone?'Hide covered':'Show covered';renderDone()};
+}
+function esc(s){return String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+function nodeLL(n){const p=D.nodes[n];return [p[1]/1e5,p[0]/1e5]}
+function markEnds(){lyrEnds.clearLayers();[[fromW,'#111','A'],[toW,'#111','B']].forEach(([w,c,t])=>{if(!w)return;
+ const m=L.marker(nodeLL(w.node),{icon:L.divIcon({className:'',html:`<div style="background:${t=='A'?'#1f8a4c':'#b91c1c'};color:#fff;width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4)">${t}</div>`,iconSize:[26,26],iconAnchor:[13,13]})}).bindTooltip(w.name+(w.off>40?` · connector access ${fmt(w.off)} away`:'')).addTo(lyrEnds);
+ if(w.off>40)L.polyline([[w.lat,w.lon],nodeLL(w.node)],{color:'#111',weight:2,dashArray:'3 5',interactive:false}).addTo(lyrEnds);
+ L.circleMarker([w.lat,w.lon],{radius:4,color:'#111',weight:1,fillColor:'#fff',fillOpacity:1}).bindTooltip(w.name).addTo(lyrEnds)});
+ if(fromW&&!toW)map.setView(nodeLL(fromW.node),15);}
+// ---------- routing ----------
+function dijkstra(s,t){const F=FACT[mode],n=D.nodes.length,dist=new Float64Array(n).fill(Infinity),prev=new Int32Array(n).fill(-1);dist[s]=0;
+ const h=[[0,s]];const push=x=>{h.push(x);let i=h.length-1;while(i>0){const p=(i-1)>>1;if(h[p][0]<=h[i][0])break;[h[p],h[i]]=[h[i],h[p]];i=p}};
+ const pop=()=>{const top=h[0],last=h.pop();if(h.length){h[0]=last;let i=0;for(;;){let l=2*i+1,r=l+1,m=i;if(l<h.length&&h[l][0]<h[m][0])m=l;if(r<h.length&&h[r][0]<h[m][0])m=r;if(m==i)break;[h[m],h[i]]=[h[i],h[m]];i=m}}return top};
+ while(h.length){const [d,u]=pop();if(d>dist[u])continue;if(u===t)break;for(const ei of adj[u]){const e=E[ei],f=F[e.c];if(f===Infinity)continue;const v=e.u===u?e.v:e.u,nd=d+e.L*f;if(nd<dist[v]){dist[v]=nd;prev[v]=ei;push([nd,v])}}}
+ if(dist[t]===Infinity)return null;const edges=[];let u=t;while(u!==s){const ei=prev[u];edges.push(ei);const e=E[ei];u=e.u===u?e.v:e.u}edges.reverse();return edges}
+function plan(){if(!fromW||!toW)return;if(fromW.node===toW.node){$('#result').innerHTML='<div class="card small">Start and end are at the same point on the network.</div>';return}
+ const eds=dijkstra(fromW.node,toW.node);lyrRoute.clearLayers();lyrPoi.clearLayers();
+ if(!eds){$('#result').innerHTML='<div class="card">No connected route between these points'+(mode=='cycle'?' without steps. Try Walk / run.':'.')+'</div>';route=null;return}
+ let cur=fromW.node,cum=0;const segs=[];const ll=[];
+ eds.forEach(ei=>{const e=E[ei],fw=e.u===cur;const pts=fw?e.ll:[...e.ll].reverse();segs.push({ei,start:cum,fw});cum+=e.L;ll.push(...(ll.length?pts.slice(1):pts));cur=fw?e.v:e.u});
+ route={eds,segs,len:cum,ll,from:fromW,to:toW};
+ L.polyline(ll,{color:'#fff',weight:9,opacity:.9,interactive:false}).addTo(lyrRoute);
+ L.polyline(ll,{color:'#111',weight:5,opacity:.9,interactive:false}).addTo(lyrRoute);
+ map.fitBounds(L.latLngBounds(ll).pad(.15),{paddingTopLeft:[0,0]});
+ // stats
+ let pcn=0,unv=0,gap=0,gapn=0,steps=0,newm=0;eds.forEach(ei=>{const e=E[ei];if(e.c<2){pcn+=e.L;if(!done.has(ei))newm+=e.L}if(e.c==1)unv+=e.L;if(e.c==3){gap+=e.L;gapn++}if(e.c==4)steps++});
+ // stops
+ const pos=new Map();segs.forEach(s=>pos.set(s.ei,s));
+ const stops=[];D.pois.forEach((p,pi)=>{let best=null;for(const [ei,dd,fr] of p[5]){const s=pos.get(ei);if(s){const k=s.start+(s.fw?fr:1-fr)*E[ei].L;if(!best||dd<best.off)best={km:k,off:dd}}}if(best)stops.push({pi,cat:p[0],name:p[1],lon:p[2],lat:p[3],info:p[4],...best})});
+ stops.sort((a,b)=>a.km-b.km);route.stops=stops;
+ const t=mode=='cycle'?`${Math.round(cum/1000/SPEED.cycle*60)} min cycling`:`${hm(cum/1000/SPEED.walk.w)} walk · ${hm(cum/1000/SPEED.walk.r)} run`;
+ const counts={};stops.forEach(s=>counts[s.cat]=(counts[s.cat]||0)+1);
+ $('#result').innerHTML=`<div class="card">
+ <div class="stats"><div class="stat"><b>${fmt(cum)}</b><span>total</span></div><div class="stat"><b>${Math.round(pcn/cum*100)}%</b><span>on connectors</span></div><div class="stat"><b>${fmt(newm)}</b><span>new to you</span></div></div>
+ <div class="small">${t}</div>
+ <div class="warn">${cum-pcn>50?`<i>${fmt(cum-pcn)}</i> on link paths (park paths, footpaths, bridges). `:''}${unv>50?`<i>${fmt(unv)}</i> on unverified connector, which may not be built yet. `:''}${gapn?`<i>${gapn} gap${gapn>1?'s':''}</i> in the data (${fmt(gap)}), usually road crossings. `:''}${steps&&mode=='walk'?`Includes ${steps} set${steps>1?'s':''} of steps. `:''}${fromW.off>40?`Start is ${fmt(fromW.off)} from the nearest connector. `:''}${toW.off>40?`End is ${fmt(toW.off)} from the nearest connector.`:''}</div>
+ <div class="row" style="margin-top:10px"><button class="btn" id="markdone" style="flex:1">I've done this route</button></div>
+ </div>
+ <div class="card"><b>Along the way</b><div class="chips">${Object.entries(CAT).map(([k,c])=>`<span class="chip ${c.on?'':'off'}" data-c="${k}"><span style="color:${c.c}">●</span> ${c.n} ${counts[k]||0}</span>`).join('')}</div><div id="stops"></div></div>`;
+ document.querySelectorAll('.chip').forEach(ch=>ch.onclick=()=>{CAT[ch.dataset.c].on^=1;ch.classList.toggle('off');drawStops()});
+ $('#markdone').onclick=markDone;drawStops();
+}
+function hm(h){const m=Math.round(h*60);return m<60?m+' min':Math.floor(m/60)+' h '+(m%60)+' min'}
+function drawStops(){lyrPoi.clearLayers();const el=$('#stops');const vis=route.stops.filter(s=>CAT[s.cat].on);
+ el.innerHTML=vis.length?vis.map((s,k)=>{const c=CAT[s.cat];const meta=[s.off>25?fmt(s.off)+' off route':'on route',s.info.opening_hours,s.info.cuisine&&s.info.cuisine.replace(/;/g,', '),s.info.stalls&&s.info.stalls+' food stalls',s.info.fee=='yes'&&'fee'].filter(Boolean).join(' · ');
+  return `<div class="stop" data-k="${k}"><div class="km">${(s.km/1000).toFixed(1)} km</div><div class="ico" style="background:${c.c}">${c.i}</div><div><div class="nm">${esc(s.name)}</div><div class="mt">${esc(meta)}</div></div></div>`}).join(''):'<div class="small">Nothing in these categories near this route.</div>';
+ vis.forEach((s,k)=>{const c=CAT[s.cat];const m=L.circleMarker([s.lat,s.lon],{radius:s.cat=='hawker'?8:6,color:'#fff',weight:2,fillColor:c.c,fillOpacity:1}).bindPopup(popup(s)).addTo(lyrPoi);s.m=m});
+ el.querySelectorAll('.stop').forEach(d=>d.onclick=()=>{const s=vis[+d.dataset.k];map.setView([s.lat,s.lon],17);s.m.openPopup()});}
+function popup(s){const c=CAT[s.cat],i=s.info;return `<b>${esc(s.name)}</b><br><span style="color:${c.c}">${c.n.replace(/s$/,'')}</span> · ${(s.km/1000).toFixed(1)} km along route${s.off>25?', '+fmt(s.off)+' off':''}${i.addr?'<br>'+esc(i.addr):''}${i.opening_hours?'<br>Hours: '+esc(i.opening_hours):''}${i.stalls?'<br>'+i.stalls+' cooked-food stalls':''}<br><a href="https://www.google.com/maps/search/?api=1&query=${s.lat},${s.lon}" target="_blank" rel="noopener">Open in Google Maps</a>`}
+// ---------- coverage ----------
+function renderCov(){if(!D)return;let m=0;done.forEach(i=>{const e=E[i];if(e&&e.c<2)m+=e.L});const p=m/D.pcnTotal*100;
+ $('#covpct').textContent=p.toFixed(1)+'%';$('#covbar').style.width=Math.min(100,p)+'%';$('#covtxt').textContent=`${fmt(m)} of ${fmt(D.pcnTotal)} of park connector covered.`;
+ $('#history').innerHTML=hist.length?'<div class="small" style="margin-top:8px"><b>Recent</b><br>'+hist.slice(-5).reverse().map(h=>`${new Date(h.t).toLocaleDateString('en-SG',{day:'numeric',month:'short'})} · ${esc(h.from)} → ${esc(h.to)} · ${fmt(h.km*1000)}`).join('<br>')+'</div>':''}
+function markDone(){if(!route)return;const add=addDone(route.eds);
+ logHist({t:Date.now(),from:route.from.name,to:route.to.name,km:+(route.len/1000).toFixed(2),mode,add:Math.round(add)});persist();renderCov();renderDone();
+ $('#markdone').textContent=add?`Added ${fmt(add)} of new connector ✓`:'Logged ✓ (no new connector)';$('#markdone').disabled=true}
+async function resetCov(){const b=$('#reset');if(b.dataset.c!=='1'){b.dataset.c='1';b.textContent=cfg.url?'Tap again: clears every device':'Tap again to reset';setTimeout(()=>{b.dataset.c='';b.textContent='Reset'},3000);return}
+ b.dataset.c='';b.textContent='Reset';
+ if(cfg.url&&cfg.key){try{await call({action:'reset'})}catch(e){syncNote('Reset failed: could not reach your sync sheet ('+e.message+'). Nothing was cleared.');return}}
+ done.clear();hist=[];pending={seg:[],hist:[]};saveLocal();renderCov();renderDone();syncState()}
+let grid=null;
+function buildGrid(){grid=new Map();const kx=111320*Math.cos(1.35*Math.PI/180),ky=110574,C=30;
+ E.forEach((e,i)=>{if(e.c>1)return;const s=[];for(let k=1;k<e.ll.length;k++){const a=e.ll[k-1],b=e.ll[k],d=Math.hypot((b[1]-a[1])*kx,(b[0]-a[0])*ky),n=Math.max(1,Math.ceil(d/15));for(let j=0;j<n;j++)s.push([a[1]+(b[1]-a[1])*j/n,a[0]+(b[0]-a[0])*j/n])}s.push([e.ll.at(-1)[1],e.ll.at(-1)[0]]);
+  e.samp=s.length;s.forEach((p,si)=>{const key=Math.floor(p[0]*kx/C)+','+Math.floor(p[1]*ky/C);if(!grid.has(key))grid.set(key,[]);grid.get(key).push([i,si,p[0]*kx,p[1]*ky])})});grid.k=[kx,ky,C]}
+async function importGpx(ev){const files=[...ev.target.files];if(!files.length)return;if(!grid)buildGrid();const [kx,ky,C]=grid.k;let pts=0,add=0,before=done.size;
+ for(const f of files){const x=new DOMParser().parseFromString(await f.text(),'application/xml');const tp=[...x.querySelectorAll('trkpt,rtept')].map(p=>[+p.getAttribute('lon'),+p.getAttribute('lat')]);pts+=tp.length;
+  const hit=new Map();const dens=[];for(let k=0;k<tp.length;k++){dens.push(tp[k]);if(k){const a=tp[k-1],b=tp[k],d=Math.hypot((b[0]-a[0])*kx,(b[1]-a[1])*ky);const n=Math.ceil(d/10);for(let j=1;j<n;j++)dens.push([a[0]+(b[0]-a[0])*j/n,a[1]+(b[1]-a[1])*j/n])}}
+  dens.forEach(([lo,la])=>{const X=lo*kx,Y=la*ky,cx=Math.floor(X/C),cy=Math.floor(Y/C);for(let a=-1;a<=1;a++)for(let b=-1;b<=1;b++){const arr=grid.get((cx+a)+','+(cy+b));if(arr)for(const [ei,si,px,py] of arr)if(Math.hypot(px-X,py-Y)<=25){if(!hit.has(ei))hit.set(ei,new Set());hit.get(ei).add(si)}}});
+  const got=[];hit.forEach((s,ei)=>{if(s.size/E[ei].samp>=.7)got.push(ei)});const a=addDone(got);add+=a;
+  logHist({t:Date.now()+files.indexOf(f),from:'GPX',to:f.name,km:0,mode:'gpx',add:Math.round(a)})}
+ persist();renderCov();renderDone();ev.target.value='';
+ $('#syncnote').textContent=pts?`Imported ${files.length} file${files.length>1?'s':''} (${pts} points): ${fmt(add)} of new connector matched.`:'No track points found in that file.'}
+</script>
+</body>
+</html>
