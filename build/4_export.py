@@ -27,10 +27,15 @@ def cls_of(d):
     return 4 if a.get('stairs') else (5 if a.get('cyc')=='N' else 2)
 def name_of(d):
     s=d['src']; return '' if s<0 else (allL[s].get('name') or '')
+def loop_of(d):
+    s=d['src']
+    if s<0 or allL[s]['kind']!='pcn': return ''
+    lp=allL[s].get('loop') or ''
+    return 'Central Urban Loop' if lp=='Urban Central Loop' else lp
 # keep components with >=0.3km
 keepn=set().union(*[c for c in cc if sum(d['len'] for *_,d in H.subgraph(c).edges(data=True))>300])
 G=H.subgraph(keepn).copy()
-for u,v,d in G.edges(data=True): d['cls']=cls_of(d); d['name']=name_of(d); d['coords']=list(d['g'].coords)
+for u,v,d in G.edges(data=True): d['cls']=cls_of(d); d['name']=name_of(d); d['loop']=loop_of(d); d['coords']=list(d['g'].coords)
 # orient coords so they start at u
 def oriented(d,u):
     c=d['coords']
@@ -44,13 +49,13 @@ while changed:
         (a,),(b,)=[ [x] for x in G.neighbors(n)] if len(list(G.neighbors(n)))==2 else ([None],[None])
         if a is None or a==b: continue
         d1=G[a][n]; d2=G[n][b]
-        if d1['cls']!=d2['cls'] or d1['name']!=d2['name']: continue
+        if d1['cls']!=d2['cls'] or d1['name']!=d2['name'] or d1['loop']!=d2['loop']: continue
         if G.has_edge(a,b): continue
         c=oriented(d1,a)+oriented(d2,n)[1:]
-        G.remove_node(n); G.add_edge(a,b,len=d1['len']+d2['len'],cls=d1['cls'],name=d1['name'],coords=c,src=d1['src']); changed=True
+        G.remove_node(n); G.add_edge(a,b,len=d1['len']+d2['len'],cls=d1['cls'],name=d1['name'],loop=d1['loop'],coords=c,src=d1['src']); changed=True
 print("contracted:",G.number_of_nodes(),"nodes",G.number_of_edges(),"edges")
 nodes=list(G.nodes()); nid={n:i for i,n in enumerate(nodes)}
-names=['']; nidx={'':0}
+names=['']; nidx={'':0}; loops=['']; lidx={'':0}
 E=[]; geoms=[]
 for u,v,d in G.edges(data=True):
     g=LineString(oriented(d,u)).simplify(1.0)
@@ -60,7 +65,8 @@ for u,v,d in G.edges(data=True):
     for i in range(1,len(q)): flat+= [q[i][0]-q[i-1][0], q[i][1]-q[i-1][1]]
     nm=d['name']
     if nm not in nidx: nidx[nm]=len(names); names.append(nm)
-    E.append([nid[u],nid[v],round(d['len']),d['cls'],nidx[nm],flat]); geoms.append(g)
+    if d['loop'] not in lidx: lidx[d['loop']]=len(loops); loops.append(d['loop'])
+    E.append([nid[u],nid[v],round(d['len']),d['cls'],nidx[nm],flat,lidx[d['loop']]]); geoms.append(g)
 Nll=[[round(TI(*n)[0]*1e5),round(TI(*n)[1]*1e5)] for n in nodes]
 km=Counter()
 for e in E: km[e[3]]+=e[2]/1000
@@ -94,13 +100,11 @@ for oid,lat,lon,t in O['osm']:
     elif a=='drinking_water': addpoi('water',nm or 'Water point',lon,lat,info,100)
     elif a=='bicycle_repair_station': addpoi('repair',nm or 'Bike repair station',lon,lat,info,150)
     elif a=='shelter': addpoi('shelter',nm or 'Shelter',lon,lat,info,30)
-    elif a=='cafe': addpoi('cafe',nm or 'Café',lon,lat,info,250)
     elif a in ('food_court','marketplace'):
         p=Point(T(lon,lat))
         if len(neat.query(p,predicate='dwithin',distance=150)): continue  # already an NEA hawker centre
         if re.search(r'hawker|food cent|food centre|market',nm,re.I) and a!='marketplace' or re.search(r'hawker|food cent',nm,re.I):
             info['src']='OSM'; addpoi('hawker',nm,lon,lat,info,500)
-        elif a=='food_court': addpoi('foodcourt',nm or 'Coffee shop / food court',lon,lat,info,200)
 for p in pois: cnt[p[0]]+=1
 print("POIs near network",dict(cnt))
 def areas():
@@ -133,39 +137,12 @@ for nm,L in st.items():
     refs=' / '.join(sorted({r.strip() for x in L if x[3] for r in x[3].split(';') if re.match(r'^[A-Z]{2}\d+$',r.strip())}))
     s=snap(lon,lat,600)
     if s: wps.append(['station',f"{nm} {typ}"+(f" ({refs})" if refs else ''),s[0],s[1],round(lon,5),round(lat,5)])
-# parks: centroid of park paths
-pk=defaultdict(list)
-for park,ty,pt,cy,wk,w,parts in TR['tracks']:
-    if pt=='Park' and park:
-        for p in parts: pk[park]+=p
-def nice(n):
-    n=n.title() if n.isupper() or re.search(r'[A-Z]{3,} [A-Z]{3,}',n) else n
-    n=re.sub(r'\bPK\b','Park',n,flags=re.I); n=re.sub(r'\bNP\b','Nature Park',n,flags=re.I); n=re.sub(r'\bNR\b','Nature Reserve',n,flags=re.I)
-    n=re.sub(r'\bGDN\b','Garden',n,flags=re.I); n=re.sub(r'\bPG\b','Playground',n)
-    return n.title() if n.isupper() else n
-seen=set()
-for park,pts in pk.items():
-    if len(pts)<5: continue
-    if re.search(r'\b(hdb|rd|road|blk|ave|avenue|st|street|jln|jalan|way|drive|dr|lor|lorong|cres|verge|fencing|mrt|sch|school|carpark|cp|bus)\b|\(|-|/',park,re.I) and not re.search(r'park|garden|nature|reserve|reservoir|beach|promenade|waterway|trail',park,re.I): continue
-    if not re.search(r'park|pk|garden|gdn|nature|reserve|reservoir|beach|promenade|waterway|trail|np|nr|hill|green|lake|wetland|corridor|plains|island|marsh|forest|woods|pond|bay|point|field|common|square|gallop',park,re.I): continue
-    plen=sum(math.hypot(*np.subtract(T(*pts[k]),T(*pts[k-1]))) for k in range(1,len(pts)))
-    if plen<400: continue
-    lon=np.mean([p[0] for p in pts]); lat=np.mean([p[1] for p in pts])
-    nm=nice(park.strip())
-    if nm.lower() in seen: continue
-    seen.add(nm.lower())
-    # snap: nearest main-network node to any park path point (park entrance on network)
-    best=None
-    for p in pts[::max(1,len(pts)//60)]:
-        s=snap(p[0],p[1],250)
-        if s and (best is None or s[1]<best[1]): best=s
-    if best: wps.append(['park',nm,best[0],best[1],round(lon,5),round(lat,5)])
 for p in pois:
     if p[0]=='hawker':
         s=snap(p[2],p[3],500)
         if s: wps.append(['hawker',p[1],s[0],s[1],p[2],p[3]])
 print("waypoints",Counter(w[0] for w in wps))
-out=dict(nodes=Nll,edges=E,names=names,pois=pois,wps=wps,mainComp=sorted(mainset),
+out=dict(nodes=Nll,edges=E,names=names,loops=loops,pois=pois,wps=wps,mainComp=sorted(mainset),
   meta=dict(built=__import__('datetime').date.today().isoformat(),version=__import__('datetime').datetime.now().strftime('%Y-%m-%d-%H%M'),sources=['NParks Park Connector Loop (data.gov.sg, 2025)','URA Master Plan 2025 Park Connector line (data.gov.sg, Dec 2025)','NParks Tracks (data.gov.sg, Aug 2025)','NParks Park Connector (2012)','NEA Hawker Centres (data.gov.sg)','OpenStreetMap contributors (ODbL), '+__import__('datetime').date.today().strftime('%b %Y')]))
 out['areas']=areas()
 s=json.dumps(out,separators=(',',':'),ensure_ascii=False)

@@ -8,4 +8,5 @@ python3 1_crosscheck.py
 python3 2_network.py
 python3 3_connect.py
 python3 4_export.py
+python3 5_routes.py
 echo "net.json rebuilt. Commit and push it to update the site."

@@ -68,18 +68,26 @@ a{color:var(--accent)}
 <aside id="side">
 <header>
 <h1><span>PCN</span> Explorer</h1>
-<div class="sub">Plan routes on Singapore's park connectors, see stops along the way, and track what you've covered.</div>
+<div class="sub">Follow Singapore's park connectors end to end, see toilets, water and hawker centres along the way, and track what you've covered.</div>
 </header>
 <div class="scroll">
 <div id="loading" class="small">Loading network…</div>
 <div id="ui" style="display:none">
+<div class="seg" id="tab" style="margin-top:0"><button data-t="conn" class="on">Whole connector</button><button data-t="p2p">Point to point</button></div>
+<div id="pConn">
+<label class="f">Park connector</label>
+<div class="pick"><input id="rsel" placeholder="Search, e.g. Kallang or Rail Corridor" autocomplete="off"><div class="dd"></div></div>
+<div class="row" style="margin-top:10px"><button class="btn ghost" id="rev" style="flex:1" disabled>⇄ Reverse direction</button><button class="btn ghost" id="rclear">Clear</button></div>
+</div>
+<div id="pP2P" style="display:none">
 <label class="f">Start</label>
-<div class="pick"><input id="from" placeholder="MRT station, park or hawker centre" autocomplete="off"><div class="dd"></div></div>
+<div class="pick"><input id="from" placeholder="MRT station or hawker centre" autocomplete="off"><div class="dd"></div></div>
 <button class="btn ghost swap" id="swap" title="Swap start and end">⇅</button>
 <label class="f" style="margin-top:0">End</label>
-<div class="pick"><input id="to" placeholder="MRT station, park or hawker centre" autocomplete="off"><div class="dd"></div></div>
+<div class="pick"><input id="to" placeholder="MRT station or hawker centre" autocomplete="off"><div class="dd"></div></div>
 <div class="seg" id="mode"><button data-m="walk" class="on">Walk / run</button><button data-m="cycle">Cycle</button></div>
 <div class="row" style="margin-top:12px"><button class="btn" id="go" style="flex:1" disabled>Plan route</button><button class="btn ghost" id="clear">Clear</button></div>
+</div>
 
 <div id="result"></div>
 
@@ -109,7 +117,7 @@ a{color:var(--accent)}
 <span style="color:var(--unv)">■</span> <b>Unverified</b> — only the Master Plan shows it, so it may still be planned. Routing avoids it slightly.<br>
 <span style="color:var(--link)">■</span> <b>Link path</b> — park paths, footpaths and bridges that join connectors (OpenStreetMap / NParks). These don't count toward your coverage.<br>
 <span style="color:var(--gap)">■</span> <b>Gap</b> — a short break (usually a road crossing) that no dataset draws. Check it on the ground.</p>
-<p>Toilets, water points, shelters, cafés and coffee shops come from OpenStreetMap, so some may be missing or closed. Hawker centres come from NEA. Built <span id="built"></span>.</p>
+<p>Toilets, water points, shelters and bike repair stations come from OpenStreetMap, so some may be missing or closed. Hawker centres come from NEA. Built <span id="built"></span>.</p>
 <p id="srcs"></p>
 </div></details>
 </div>
@@ -120,8 +128,8 @@ a{color:var(--accent)}
 </div>
 </div>
 <script>
-const CAT={toilet:{n:'Toilets',c:'#0e7490',i:'WC',on:1},water:{n:'Water',c:'#2563eb',i:'💧',on:1},hawker:{n:'Hawker centres',c:'#c2410c',i:'🍜',on:1},cafe:{n:'Cafés',c:'#7c3aed',i:'☕',on:1},foodcourt:{n:'Coffee shops',c:'#a16207',i:'🍽',on:0},shelter:{n:'Shelters',c:'#64748b',i:'⛱',on:0},repair:{n:'Bike repair',c:'#15803d',i:'🔧',on:1}};
-const WPT={station:'MRT/LRT',park:'Park',hawker:'Hawker'};
+const CAT={toilet:{n:'Toilets',c:'#0e7490',i:'WC',on:1},water:{n:'Water',c:'#2563eb',i:'💧',on:1},hawker:{n:'Hawker centres',c:'#c2410c',i:'🍜',on:1},shelter:{n:'Shelters',c:'#64748b',i:'⛱',on:0},repair:{n:'Bike repair',c:'#15803d',i:'🔧',on:1}};
+const WPT={station:'MRT/LRT',hawker:'Hawker'};
 const FACT={walk:{0:1,1:1.4,2:2.2,3:3,4:2.6,5:2.2},cycle:{0:1,1:1.4,2:2.4,3:3,4:Infinity,5:5}};
 const SPEED={walk:{w:5,r:10},cycle:15};
 let D,E=[],adj,map,route=null,mode='walk',fromW=null,toW=null,done=new Set(),hist=[],db=null,userId=null,showDone=true;
@@ -175,7 +183,7 @@ function init(d){D=d;
  D.edges.forEach((e,i)=>{const [u,v,L,c,n,f]=e;E.push({u,v,L,c,n,ll:decode(f)});adj[u].push(i);adj[v].push(i)});
  D.pcnTotal=E.reduce((s,e)=>s+(e.c<2?e.L:0),0);
  $('#built').textContent=D.meta.built+' (network '+D.meta.version+')';$('#srcs').textContent='Sources: '+D.meta.sources.join('; ')+'.';
- buildMap();loadLocal();renderCov();renderDone();setupPickers();setupSync();
+ buildMap();loadLocal();renderCov();renderDone();setupPickers();setupConn();setupSync();
  $('#loading').style.display='none';$('#ui').style.display='block';
 }
 // ---------- map ----------
@@ -218,7 +226,7 @@ function setupPickers(){
   inp.addEventListener('blur',()=>setTimeout(()=>dd.style.display='none',150));
  });
  $('#swap').onclick=()=>{[fromW,toW]=[toW,fromW];$('#from').value=fromW?fromW.name:'';$('#to').value=toW?toW.name:'';markEnds();if(fromW&&toW)plan()};
- $('#go').onclick=plan;$('#clear').onclick=()=>{fromW=toW=null;route=null;$('#from').value=$('#to').value='';$('#go').disabled=true;lyrRoute.clearLayers();lyrPoi.clearLayers();lyrEnds.clearLayers();$('#result').innerHTML=''};
+ $('#go').onclick=plan;$('#clear').onclick=()=>{fromW=toW=null;$('#from').value=$('#to').value='';$('#go').disabled=true;clearAll()};
  document.querySelectorAll('#mode button').forEach(b=>b.onclick=()=>{document.querySelectorAll('#mode button').forEach(x=>x.classList.toggle('on',x===b));mode=b.dataset.m;if(route)plan()});
  $('#gpx').onchange=importGpx;$('#reset').onclick=resetCov;
  $('#showdone').onclick=()=>{showDone=!showDone;$('#showdone').textContent=showDone?'Hide covered':'Show covered';renderDone()};
@@ -265,18 +273,68 @@ function plan(){if(!fromW||!toW)return;if(fromW.node===toW.node){$('#result').in
 }
 function hm(h){const m=Math.round(h*60);return m<60?m+' min':Math.floor(m/60)+' h '+(m%60)+' min'}
 function drawStops(){lyrPoi.clearLayers();const el=$('#stops');const vis=route.stops.filter(s=>CAT[s.cat].on);
- el.innerHTML=vis.length?vis.map((s,k)=>{const c=CAT[s.cat];const meta=[s.off>25?fmt(s.off)+' off route':'on route',s.info.opening_hours,s.info.cuisine&&s.info.cuisine.replace(/;/g,', '),s.info.stalls&&s.info.stalls+' food stalls',s.info.fee=='yes'&&'fee'].filter(Boolean).join(' · ');
+ el.innerHTML=vis.length?vis.map((s,k)=>{const c=CAT[s.cat];const meta=[s.branch?'on a side branch'+(s.off>25?', '+fmt(s.off)+' off':''):s.off>25?fmt(s.off)+' off route':'on route',s.info.opening_hours,s.info.cuisine&&s.info.cuisine.replace(/;/g,', '),s.info.stalls&&s.info.stalls+' food stalls',s.info.fee=='yes'&&'fee'].filter(Boolean).join(' · ');
   return `<div class="stop" data-k="${k}"><div class="km">${(s.km/1000).toFixed(1)} km</div><div class="ico" style="background:${c.c}">${c.i}</div><div><div class="nm">${esc(s.name)}</div><div class="mt">${esc(meta)}</div></div></div>`}).join(''):'<div class="small">Nothing in these categories near this route.</div>';
  vis.forEach((s,k)=>{const c=CAT[s.cat];const m=L.circleMarker([s.lat,s.lon],{radius:s.cat=='hawker'?8:6,color:'#fff',weight:2,fillColor:c.c,fillOpacity:1}).bindPopup(popup(s)).addTo(lyrPoi);s.m=m});
  el.querySelectorAll('.stop').forEach(d=>d.onclick=()=>{const s=vis[+d.dataset.k];map.setView([s.lat,s.lon],17);s.m.openPopup()});}
 function popup(s){const c=CAT[s.cat],i=s.info;return `<b>${esc(s.name)}</b><br><span style="color:${c.c}">${c.n.replace(/s$/,'')}</span> · ${(s.km/1000).toFixed(1)} km along route${s.off>25?', '+fmt(s.off)+' off':''}${i.addr?'<br>'+esc(i.addr):''}${i.opening_hours?'<br>Hours: '+esc(i.opening_hours):''}${i.stalls?'<br>'+i.stalls+' cooked-food stalls':''}<br><a href="https://www.google.com/maps/search/?api=1&query=${s.lat},${s.lon}" target="_blank" rel="noopener">Open in Google Maps</a>`}
+// ---------- whole connectors ----------
+let connItems=[];
+function connPct(r){let t=0,d=0;for(const i of r.edges.concat(r.extra)){const e=E[i];if(e.c<2){t+=e.L;if(done.has(i))d+=e.L}}return t?d/t:0}
+function endName(r,k){const n=r.ends[k];if(n)return n;const a=D.nodes[r.start],b=D.nodes[r.end],dx=b[0]-a[0],dy=b[1]-a[1];
+ const dir=Math.abs(dx)>Math.abs(dy)?(dx>0?['west','east']:['east','west']):(dy>0?['south','north']:['north','south']);return dir[k]+' end'}
+function connList(){connItems=D.routes.map((r,i)=>({i,r,key:r.name.toLowerCase()+' '+r.ends.join(' ').toLowerCase(),pct:connPct(r)}))}
+function setupConn(){connList();const inp=$('#rsel'),dd=inp.nextElementSibling;let hl=0,list=[];
+ const show=()=>{const q=inp.value.trim().toLowerCase();list=connItems.filter(it=>!q||it.key.includes(q)).sort((a,b)=>(b.r.kind=='long')-(a.r.kind=='long')||a.r.name.localeCompare(b.r.name));
+  dd.innerHTML=list.map((it,k)=>`<div data-k="${k}" class="${k==hl?'hl':''}" style="flex-wrap:wrap"><span>${esc(it.r.name)}</span><small>${(it.r.len/1000).toFixed(1)} km${it.pct>0.005?` · <b style="color:var(--done)">${Math.round(it.pct*100)}% done</b>`:''}</small><span class="small" style="flex-basis:100%">${esc(endName(it.r,0))} → ${esc(endName(it.r,1))}</span></div>`).join('')||'<div class="small">No match</div>';dd.style.display='block'};
+ const pick=it=>{inp.value=it.r.name;dd.style.display='none';showConn(it.i,false)};
+ inp.addEventListener('focus',()=>{inp.select();hl=0;show()});inp.addEventListener('input',()=>{hl=0;show()});
+ inp.addEventListener('keydown',e=>{if(e.key=='ArrowDown'){hl=Math.min(hl+1,list.length-1);show();e.preventDefault()}else if(e.key=='ArrowUp'){hl=Math.max(hl-1,0);show();e.preventDefault()}else if(e.key=='Enter'&&list[hl]){pick(list[hl]);e.preventDefault()}else if(e.key=='Escape'){dd.style.display='none'}});
+ dd.addEventListener('mousedown',e=>{const d=e.target.closest('[data-k]');if(d){e.preventDefault();pick(list[+d.dataset.k])}});
+ inp.addEventListener('blur',()=>setTimeout(()=>dd.style.display='none',150));
+ $('#rev').onclick=()=>{if(route&&route.conn!=null)showConn(route.conn,!route.rev)};
+ $('#rclear').onclick=clearAll;
+ document.querySelectorAll('#tab button').forEach(b=>b.onclick=()=>{document.querySelectorAll('#tab button').forEach(x=>x.classList.toggle('on',x===b));const c=b.dataset.t=='conn';$('#pConn').style.display=c?'':'none';$('#pP2P').style.display=c?'none':'';clearAll()});
+}
+function clearAll(){route=null;lyrRoute.clearLayers();lyrPoi.clearLayers();lyrEnds.clearLayers();$('#result').innerHTML='';$('#rev').disabled=true}
+function showConn(ri,rev){const r=D.routes[ri];lyrRoute.clearLayers();lyrPoi.clearLayers();lyrEnds.clearLayers();
+ const eds=rev?[...r.edges].reverse():r.edges;let cur=rev?r.end:r.start,cum=0;const segs=[],ll=[],verts=[];
+ eds.forEach(ei=>{const e=E[ei],fw=e.u===cur;const pts=fw?e.ll:[...e.ll].reverse();segs.push({ei,start:cum,fw});
+  let c=cum;pts.forEach((p,k)=>{if(k){const q=pts[k-1];c+=Math.hypot((p[1]-q[1])*111280,(p[0]-q[0])*110574)}verts.push([p[0],p[1],c])});
+  cum+=e.L;ll.push(...(ll.length?pts.slice(1):pts));cur=fw?e.v:e.u});
+ const A=rev?1:0,B=rev?0:1;
+ route={conn:ri,rev,eds,segs,len:cum,ll,mark:r.edges.concat(r.extra),from:{name:r.name+' ('+endName(r,A)+')'},to:{name:endName(r,B)}};
+ r.extra.forEach(i=>L.polyline(E[i].ll,{color:'#111',weight:3,opacity:.45,interactive:false}).addTo(lyrRoute));
+ L.polyline(ll,{color:'#fff',weight:9,opacity:.9,interactive:false}).addTo(lyrRoute);
+ L.polyline(ll,{color:'#111',weight:5,opacity:.9,interactive:false}).addTo(lyrRoute);
+ [[ll[0],'A','#1f8a4c',endName(r,A)],[ll[ll.length-1],'B','#b91c1c',endName(r,B)]].forEach(([p,t,c,n])=>L.marker(p,{icon:L.divIcon({className:'',html:`<div style="background:${c};color:#fff;width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4)">${t}</div>`,iconSize:[26,26],iconAnchor:[13,13]})}).bindTooltip(n).addTo(lyrEnds));
+ map.fitBounds(L.latLngBounds(ll.concat(...r.extra.map(i=>E[i].ll))).pad(.1));
+ // stops: on the main line by distance along it; on side branches at the nearest point of the main line
+ const pos=new Map();segs.forEach(s=>pos.set(s.ei,s));const ext=new Set(r.extra);
+ const nearKm=(lat,lon)=>{let b=null;for(const v of verts){const d=Math.hypot((v[1]-lon)*111280,(v[0]-lat)*110574);if(!b||d<b[0])b=[d,v[2]]}return b[1]};
+ const stops=[];D.pois.forEach((p,pi)=>{let best=null;for(const [ei,dd,fr] of p[5]){const s=pos.get(ei);if(s){const k=s.start+(s.fw?fr:1-fr)*E[ei].L;if(!best||dd<best.off)best={km:k,off:dd}}else if(ext.has(ei)&&(!best||dd<best.off))best={km:nearKm(p[3],p[2]),off:dd,branch:1}}if(best)stops.push({pi,cat:p[0],name:p[1],lon:p[2],lat:p[3],info:p[4],...best})});
+ stops.sort((a,b)=>a.km-b.km);route.stops=stops;
+ let pcn=0,unv=0,gapn=0;eds.forEach(ei=>{const e=E[ei];if(e.c<2)pcn+=e.L;if(e.c==1)unv+=e.L;if(e.c==3)gapn++});
+ const tot=r.total,pct=connPct(r);const counts={};stops.forEach(s=>counts[s.cat]=(counts[s.cat]||0)+1);
+ $('#rev').disabled=false;
+ $('#result').innerHTML=`<div class="card">
+ <div style="font-weight:600;font-size:15px">${esc(r.name)}</div>
+ <div class="small" style="margin:2px 0 8px"><b style="color:#1f8a4c">A</b> ${esc(endName(r,A))} → <b style="color:#b91c1c">B</b> ${esc(endName(r,B))}</div>
+ <div class="stats"><div class="stat"><b>${fmt(cum)}</b><span>end to end</span></div><div class="stat"><b>${fmt(tot)}</b><span>incl. side branches</span></div><div class="stat"><b>${Math.round(pct*100)}%</b><span>you've done</span></div></div>
+ <div class="small">${hm(cum/1000/SPEED.walk.w)} walk · ${hm(cum/1000/SPEED.walk.r)} run · ${Math.round(cum/1000/SPEED.cycle*60)} min cycling</div>
+ <div class="warn">${cum-pcn>50?`<i>${fmt(cum-pcn)}</i> of the end-to-end line runs on link paths between connector sections. `:''}${unv>50?`<i>${fmt(unv)}</i> is unverified connector, which may not be built yet. `:''}${gapn?`<i>${gapn} gap${gapn>1?'s':''}</i> in the data, usually road crossings. `:''}Side branches are drawn thinner.</div>
+ <div class="row" style="margin-top:10px"><button class="btn" id="markdone" style="flex:1">I've done this connector</button></div>
+ </div>
+ <div class="card"><b>Along the way</b><div class="chips">${Object.entries(CAT).map(([k,c])=>`<span class="chip ${c.on?'':'off'}" data-c="${k}"><span style="color:${c.c}">●</span> ${c.n} ${counts[k]||0}</span>`).join('')}</div><div id="stops"></div></div>`;
+ document.querySelectorAll('.chip').forEach(ch=>ch.onclick=()=>{CAT[ch.dataset.c].on^=1;ch.classList.toggle('off');drawStops()});
+ $('#markdone').onclick=markDone;drawStops()}
 // ---------- coverage ----------
 function renderCov(){if(!D)return;let m=0;done.forEach(i=>{const e=E[i];if(e&&e.c<2)m+=e.L});const p=m/D.pcnTotal*100;
  $('#covpct').textContent=p.toFixed(1)+'%';$('#covbar').style.width=Math.min(100,p)+'%';$('#covtxt').textContent=`${fmt(m)} of ${fmt(D.pcnTotal)} of park connector covered.`;
  $('#history').innerHTML=hist.length?'<div class="small" style="margin-top:8px"><b>Recent</b><br>'+hist.slice(-5).reverse().map(h=>`${new Date(h.t).toLocaleDateString('en-SG',{day:'numeric',month:'short'})} · ${esc(h.from)} → ${esc(h.to)} · ${fmt(h.km*1000)}`).join('<br>')+'</div>':''}
-function markDone(){if(!route)return;const add=addDone(route.eds);
+function markDone(){if(!route)return;const add=addDone(route.mark||route.eds);
  logHist({t:Date.now(),from:route.from.name,to:route.to.name,km:+(route.len/1000).toFixed(2),mode,add:Math.round(add)});persist();renderCov();renderDone();
- $('#markdone').textContent=add?`Added ${fmt(add)} of new connector ✓`:'Logged ✓ (no new connector)';$('#markdone').disabled=true}
+ $('#markdone').textContent=add?`Added ${fmt(add)} of new connector ✓`:'Logged ✓ (no new connector)';$('#markdone').disabled=true;if(route.conn!=null)connList()}
 async function resetCov(){const b=$('#reset');if(b.dataset.c!=='1'){b.dataset.c='1';b.textContent=cfg.url?'Tap again: clears every device':'Tap again to reset';setTimeout(()=>{b.dataset.c='';b.textContent='Reset'},3000);return}
  b.dataset.c='';b.textContent='Reset';
  if(cfg.url&&cfg.key){try{await call({action:'reset'})}catch(e){syncNote('Reset failed: could not reach your sync sheet ('+e.message+'). Nothing was cleared.');return}}
