@@ -3,7 +3,7 @@
 A map of Singapore's Park Connector Network (PCN) for following a park connector from one end to the other, or planning a route between MRT/LRT stations and hawker centres. It shows what's along the way (toilets, water points, hawker centres, shelters, bike repair stations) and tracks which connectors you've covered.
 
 Two modes:
-- **Whole connector** — pick a named connector (e.g. Kallang Park Connector, Rail Corridor, Round Island Route) and see it laid out end to end, with stops in order and how much of it you've done. NParks' loops (e.g. Eastern Coastal Loop) are there too, marked approximate.
+- **Whole connector** — pick a named connector (e.g. Kallang Park Connector, Rail Corridor, Round Island Route) and see it laid out end to end, with stops in order and how much of it you've done.
 - **Point to point** — route between any two MRT/LRT stations or hawker centres, staying on connectors where possible.
 
 **Live site:** https://ongweehiang.github.io/pcn-explorer/
@@ -49,7 +49,7 @@ Your saved progress carries over: each covered segment is stored with its midpoi
 - **Base:** URA Master Plan 2025 park connector lines (incl. Round Island Route and Rail Corridor), plus NParks Park Connector Loop and NParks Tracks connector stretches the Master Plan doesn't have.
 - **Cross-check:** every Master Plan line is compared with NParks Park Connector Loop, NParks Tracks, the 2012 NParks connector map and OpenStreetMap. Lines no other source shows are marked **unverified** (dashed orange) — they may be planned, not built — and routing avoids them a little.
 - **Joining it up:** breaks between connectors are joined with real paths (park paths, OpenStreetMap footpaths, bridges and crossings). Anything left under 120 m is joined with a straight **gap** line (red) — usually a road crossing.
-- **Whole connectors** (`build/5_routes.py`): connector stretches are grouped by name; each group's longest continuous line is its end-to-end route, and the rest are side branches. NParks' loops are included as an approximate option: they're drawn straight from NParks' loop lines (which overlap and break up in places), stops are placed by their position round the loop, and marking a loop done counts the connector lines along it.
+- **Whole connectors** (`build/5_routes.py`): connector stretches are grouped by name; each group's longest continuous line is its end-to-end route, and the rest are side branches. NParks' seven loops aren't included yet — their source lines overlap and break up too much to put in order reliably.
 - **Routing** prefers connectors: link paths count about 2× their length, so routes stay mostly on the PCN. Cycle mode avoids steps and no-cycling paths.
 
 ## Data sources and licences
