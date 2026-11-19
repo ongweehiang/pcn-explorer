@@ -76,7 +76,7 @@ a{color:var(--accent)}
 <div class="seg" id="tab" style="margin-top:0"><button data-t="conn" class="on">Whole connector</button><button data-t="p2p">Point to point</button></div>
 <div id="pConn">
 <label class="f">Park connector</label>
-<div class="pick"><input id="rsel" placeholder="Search, e.g. Kallang or Rail Corridor" autocomplete="off"><div class="dd"></div></div>
+<div class="pick"><input id="rsel" placeholder="Search, e.g. Kallang, Rail Corridor or Eastern Coastal Loop" autocomplete="off"><div class="dd"></div></div>
 <div class="row" style="margin-top:10px"><button class="btn ghost" id="rev" style="flex:1" disabled>⇄ Reverse direction</button><button class="btn ghost" id="rclear">Clear</button></div>
 </div>
 <div id="pP2P" style="display:none">
@@ -285,8 +285,8 @@ function endName(r,k){const n=r.ends[k];if(n)return n;const a=D.nodes[r.start],b
  const dir=Math.abs(dx)>Math.abs(dy)?(dx>0?['west','east']:['east','west']):(dy>0?['south','north']:['north','south']);return dir[k]+' end'}
 function connList(){connItems=D.routes.map((r,i)=>({i,r,key:r.name.toLowerCase()+' '+r.ends.join(' ').toLowerCase(),pct:connPct(r)}))}
 function setupConn(){connList();const inp=$('#rsel'),dd=inp.nextElementSibling;let hl=0,list=[];
- const show=()=>{const q=inp.value.trim().toLowerCase();list=connItems.filter(it=>!q||it.key.includes(q)).sort((a,b)=>(b.r.kind=='long')-(a.r.kind=='long')||a.r.name.localeCompare(b.r.name));
-  dd.innerHTML=list.map((it,k)=>`<div data-k="${k}" class="${k==hl?'hl':''}" style="flex-wrap:wrap"><span>${esc(it.r.name)}</span><small>${(it.r.len/1000).toFixed(1)} km${it.pct>0.005?` · <b style="color:var(--done)">${Math.round(it.pct*100)}% done</b>`:''}</small><span class="small" style="flex-basis:100%">${esc(endName(it.r,0))} → ${esc(endName(it.r,1))}</span></div>`).join('')||'<div class="small">No match</div>';dd.style.display='block'};
+ const show=()=>{const q=inp.value.trim().toLowerCase();const ord={loop:0,long:1,connector:2};list=connItems.filter(it=>!q||it.key.includes(q)).sort((a,b)=>ord[a.r.kind]-ord[b.r.kind]||a.r.name.localeCompare(b.r.name));
+  dd.innerHTML=list.map((it,k)=>`<div data-k="${k}" class="${k==hl?'hl':''}" style="flex-wrap:wrap"><span>${esc(it.r.name)}</span><small>${it.r.kind=='loop'?'~':''}${(it.r.len/1000).toFixed(it.r.kind=='loop'?0:1)} km${it.pct>0.005?` · <b style="color:var(--done)">${Math.round(it.pct*100)}% done</b>`:''}</small><span class="small" style="flex-basis:100%">${it.r.kind=='loop'?'NParks loop · approximate · starts '+esc(it.r.ends[0]):esc(endName(it.r,0))+' → '+esc(endName(it.r,1))}</span></div>`).join('')||'<div class="small">No match</div>';dd.style.display='block'};
  const pick=it=>{inp.value=it.r.name;dd.style.display='none';showConn(it.i,false)};
  inp.addEventListener('focus',()=>{inp.select();hl=0;show()});inp.addEventListener('input',()=>{hl=0;show()});
  inp.addEventListener('keydown',e=>{if(e.key=='ArrowDown'){hl=Math.min(hl+1,list.length-1);show();e.preventDefault()}else if(e.key=='ArrowUp'){hl=Math.max(hl-1,0);show();e.preventDefault()}else if(e.key=='Enter'&&list[hl]){pick(list[hl]);e.preventDefault()}else if(e.key=='Escape'){dd.style.display='none'}});
@@ -297,7 +297,7 @@ function setupConn(){connList();const inp=$('#rsel'),dd=inp.nextElementSibling;l
  document.querySelectorAll('#tab button').forEach(b=>b.onclick=()=>{document.querySelectorAll('#tab button').forEach(x=>x.classList.toggle('on',x===b));const c=b.dataset.t=='conn';$('#pConn').style.display=c?'':'none';$('#pP2P').style.display=c?'none':'';clearAll()});
 }
 function clearAll(){route=null;lyrRoute.clearLayers();lyrPoi.clearLayers();lyrEnds.clearLayers();$('#result').innerHTML='';$('#rev').disabled=true}
-function showConn(ri,rev){const r=D.routes[ri];lyrRoute.clearLayers();lyrPoi.clearLayers();lyrEnds.clearLayers();
+function showConn(ri,rev){const r=D.routes[ri];if(r.kind=='loop')return showLoop(ri,rev);lyrRoute.clearLayers();lyrPoi.clearLayers();lyrEnds.clearLayers();
  const eds=rev?[...r.edges].reverse():r.edges;let cur=rev?r.end:r.start,cum=0;const segs=[],ll=[],verts=[];
  eds.forEach(ei=>{const e=E[ei],fw=e.u===cur;const pts=fw?e.ll:[...e.ll].reverse();segs.push({ei,start:cum,fw});
   let c=cum;pts.forEach((p,k)=>{if(k){const q=pts[k-1];c+=Math.hypot((p[1]-q[1])*111280,(p[0]-q[0])*110574)}verts.push([p[0],p[1],c])});
@@ -326,6 +326,26 @@ function showConn(ri,rev){const r=D.routes[ri];lyrRoute.clearLayers();lyrPoi.cle
  <div class="row" style="margin-top:10px"><button class="btn" id="markdone" style="flex:1">I've done this connector</button></div>
  </div>
  <div class="card"><b>Along the way</b><div class="chips">${Object.entries(CAT).map(([k,c])=>`<span class="chip ${c.on?'':'off'}" data-c="${k}"><span style="color:${c.c}">●</span> ${c.n} ${counts[k]||0}</span>`).join('')}</div><div id="stops"></div></div>`;
+ document.querySelectorAll('.chip').forEach(ch=>ch.onclick=()=>{CAT[ch.dataset.c].on^=1;ch.classList.toggle('off');drawStops()});
+ $('#markdone').onclick=markDone;drawStops()}
+function showLoop(ri,rev){const r=D.routes[ri];lyrRoute.clearLayers();lyrPoi.clearLayers();lyrEnds.clearLayers();
+ const Lm=r.len;route={conn:ri,rev,eds:[],segs:[],len:Lm,ll:[],mark:r.extra,from:{name:r.name+' (loop from '+r.ends[0]+')'},to:{name:r.ends[0]}};
+ r.draw.forEach(l=>{L.polyline(l,{color:'#fff',weight:8,opacity:.9,interactive:false}).addTo(lyrRoute);L.polyline(l,{color:'#111',weight:4,opacity:.85,interactive:false}).addTo(lyrRoute)});
+ const sp=nodeLL(r.start);
+ L.marker(sp,{icon:L.divIcon({className:'',html:`<div style="background:#1f8a4c;color:#fff;width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4)">S</div>`,iconSize:[26,26],iconAnchor:[13,13]})}).bindTooltip('Start / finish: '+r.ends[0]).addTo(lyrEnds);
+ map.fitBounds(L.latLngBounds([].concat(...r.draw)).pad(.08));
+ const stops=r.stops.map(([pi,km,off])=>{const p=D.pois[pi];return {pi,cat:p[0],name:p[1],lon:p[2],lat:p[3],info:p[4],km:rev?(km?Lm-km:0):km,off}});
+ stops.sort((a,b)=>a.km-b.km);route.stops=stops;
+ const pct=connPct(r);const counts={};stops.forEach(s=>counts[s.cat]=(counts[s.cat]||0)+1);
+ $('#rev').disabled=false;
+ $('#result').innerHTML=`<div class="card">
+ <div style="font-weight:600;font-size:15px">${esc(r.name)} <span class="tag">approximate</span></div>
+ <div class="small" style="margin:2px 0 8px">Start and finish near <b>${esc(r.ends[0])}</b>, going ${rev?'anticlockwise':'clockwise'}</div>
+ <div class="stats"><div class="stat"><b>~${fmt(Lm)}</b><span>of NParks loop lines</span></div><div class="stat"><b>${r.stops.length}</b><span>stops nearby</span></div><div class="stat"><b>${Math.round(pct*100)}%</b><span>you've done</span></div></div>
+ <div class="warn">This loop is drawn straight from NParks' loop data, which overlaps and breaks up in places, so the length includes doubled-up and side stretches, and the kilometre marks are only a rough position round the loop. Check the line on the map before you set off.</div>
+ <div class="row" style="margin-top:10px"><button class="btn" id="markdone" style="flex:1">I've done this loop</button></div>
+ </div>
+ <div class="card"><b>Round the loop</b><div class="chips">${Object.entries(CAT).map(([k,c])=>`<span class="chip ${c.on?'':'off'}" data-c="${k}"><span style="color:${c.c}">●</span> ${c.n} ${counts[k]||0}</span>`).join('')}</div><div id="stops"></div></div>`;
  document.querySelectorAll('.chip').forEach(ch=>ch.onclick=()=>{CAT[ch.dataset.c].on^=1;ch.classList.toggle('off');drawStops()});
  $('#markdone').onclick=markDone;drawStops()}
 // ---------- coverage ----------

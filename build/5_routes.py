@@ -1,6 +1,7 @@
 """Step 5: define whole routes — Round Island Route, Rail Corridor and each named park connector —
 and lay each one out end to end as a continuous path. Adds `routes` to ../net.json.
-(NParks loops are not included yet: their source lines overlap and break up too much to order reliably.)"""
+NParks' seven loops are added too, approximately: their source lines overlap and break up, so each loop is
+the set of network lines along the NParks loop alignment, ordered by going round the loop's centre."""
 import json, math, os, re, heapq
 from collections import defaultdict, Counter
 
@@ -213,6 +214,76 @@ for (kind, name), eids in sorted(groups.items(), key=lambda kv: (kv[0][0] != 'lo
     extra = sorted(i for i in aug if i not in onpath)
     routes.append(dict(name=name, kind=kind, start=a, end=b, edges=path, extra=extra, len=round(plen), total=round(sum(E[i][2] for i in aug)),
                        pcn=round(pcn / plen, 3), cover=round(cover, 3), ends=[end_label(a), end_label(b)]))
+
+# ---------- NParks loops (approximate) ----------
+from shapely.geometry import LineString
+from shapely import STRtree
+DATA = os.environ.get('PCN_DATA', os.path.join(HERE, 'data'))
+def ecoords(e):
+    f = e[5]; x, y = f[0], f[1]; out = [(x * KX, y * KY)]
+    for k in range(2, len(f), 2):
+        x += f[k]; y += f[k + 1]; out.append((x * KX, y * KY))
+    return out
+loopgeo = defaultdict(list)
+for park, lp, parts in json.load(open(os.path.join(DATA, 'pcn_data.json')))['loop']:
+    lp = 'Central Urban Loop' if lp == 'Urban Central Loop' else lp
+    for c in parts:
+        if len(c) >= 2:
+            loopgeo[lp].append([(round(x * 1e5 * KX, 1), round(y * 1e5 * KY, 1)) for x, y in c])
+from shapely.ops import unary_union
+from shapely.geometry import Point
+POI = D['pois']
+for lp, lines in sorted(loopgeo.items()):
+    geoms = [LineString(l) for l in lines]
+    t = STRtree(geoms)
+    # connector lines along the loop (these count toward your coverage when you mark the loop done)
+    tagged = []
+    for i, e in enumerate(E):
+        if E[i][3] >= 2:
+            continue
+        c = ecoords(e)
+        g = LineString(c) if len(c) >= 2 else None
+        if g is None or g.length == 0:
+            continue
+        n = max(2, int(g.length / 15) + 1)
+        pts = [g.interpolate(k / (n - 1), normalized=True) for k in range(n)]
+        if len(set(t.query(pts, predicate='dwithin', distance=25)[0])) / n >= 0.6:
+            tagged.append(i)
+    U = unary_union(geoms)
+    length = U.length
+    # ring: loop vertices ordered by angle round the loop's centre (3-degree bins, outermost vertex)
+    allv = [p for l in lines for p in l]
+    cx = sum(p[0] for p in allv) / len(allv); cy = sum(p[1] for p in allv) / len(allv)
+    bins = defaultdict(list)
+    for x, y in allv:
+        bins[int((math.degrees(math.atan2(y - cy, x - cx)) % 360) // 3)].append((x, y))
+    ring = [max(bins[b], key=lambda p: (p[0] - cx) ** 2 + (p[1] - cy) ** 2) for b in sorted(bins)]
+    st = [w for w in wps if w[0] == 'station']
+    best = min(((math.hypot(x - xy(w[2])[0], y - xy(w[2])[1]), k, w) for k, (x, y) in enumerate(ring) for w in st))
+    k0 = best[1]; ring = ring[k0:] + ring[:k0]
+    cum = [0.0]
+    for k in range(1, len(ring) + 1):
+        cum.append(cum[-1] + math.dist(ring[k - 1], ring[k % len(ring)]))
+    scale = length / cum[-1]
+    rt = STRtree([Point(p) for p in ring])
+    # stops within 120 m of the loop line, placed by their position round the loop
+    stops = []
+    for pi, p in enumerate(POI):
+        q = Point(p[2] * 1e5 * KX, p[3] * 1e5 * KY)
+        j = t.query_nearest(q, max_distance=120 if p[0] != 'hawker' else 400, return_distance=True)
+        if len(j[0]) == 0:
+            continue
+        k = rt.query_nearest(q)[0]
+        stops.append([pi, round(cum[k] * scale), round(float(j[1][0]))])
+    # drawing: the NParks loop lines themselves, simplified
+    draw = []
+    for g in (U.geoms if hasattr(U, 'geoms') else [U]):
+        g = g.simplify(2)
+        draw.append([[round(y / KY / 1e5, 5), round(x / KX / 1e5, 5)] for x, y in g.coords])
+    lab = re.sub(r'\s*\(.*\)$', '', best[2][1])
+    routes.append(dict(name=lp, kind='loop', start=best[2][2], end=best[2][2], edges=[], extra=tagged, len=round(length),
+                       total=round(length), pcn=0, cover=0, ends=[lab, lab], draw=draw, stops=stops))
+    print(f"  loop {lp:30} about {length/1000:5.1f} km, connector lines to mark {sum(E[i][2] for i in tagged)/1000:5.1f} km, stops {len(stops)}, start {lab}")
 
 # drop connectors that are basically a duplicate stretch of a longer route with the same edges
 routes.sort(key=lambda r: ({'loop': 0, 'long': 1, 'connector': 2}[r['kind']], r['name']))
